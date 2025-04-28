@@ -1,0 +1,109 @@
+#
+---
+title: "Solution for Week 9: Network Analysis I"
+format: html
+---
+# 
+   
+
+```{r, warning = FALSE}
+# Install required packages
+# install.packages("sfnetworks") # If required
+
+# Load required packages
+library(sf)
+library(sfnetworks)
+library(tidygraph)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r, warning = FALSE}
+# Read the Veloland geopackage
+veloland <- st_read("data/veloland.gpkg")
+
+# Convert to an undirected sfnetwork
+veloland_net <- as_sfnetwork(veloland, directed = FALSE)
+
+# If not already present, calculate edge length
+if (!"length" %in% colnames(as_tibble(veloland_net, active = "edges"))) {
+  veloland_net <- veloland_net %>%
+    activate("edges") %>%
+    mutate(length = st_length(geometry))
+}
+```
+
+```{r, warning = FALSE}
+# Activate nodes and compute degree, betweenness, and closeness centralities
+veloland_net <- veloland_net %>%
+  activate("nodes") %>%
+  mutate(
+    degree = centrality_degree(),
+    betweenness = centrality_betweenness(weights = length),
+    closeness = centrality_closeness(weights = length)
+  )
+
+# Extract nodes and edges as sf objects
+veloland_nodes <- veloland_net %>%
+  activate("nodes") %>%
+  st_as_sf()
+
+veloland_edges <- veloland_net %>%
+  activate("edges") %>%
+  st_as_sf()
+```
+
+```{r, warning = FALSE}
+# Transfer mean centrality values from nodes to edges
+veloland_edges <- aggregate(veloland_nodes, veloland_edges, FUN = "mean")
+```
+
+```{r, warning = FALSE}
+# Visualize betweenness centrality
+ggplot(veloland_edges) +
+  geom_sf(aes(color = betweenness)) +
+  scale_color_viridis_c(option = "plasma") +
+  labs(
+    title = "Veloland Switzerland - Betweenness Centrality",
+    color = "Betweenness"
+  ) +
+  theme_minimal()
+```
+
+```{r, warning = FALSE}
+# Visualize degree centrality
+ggplot(veloland_edges) +
+  geom_sf(aes(color = degree)) +
+  scale_color_viridis_c(option = "inferno") +
+  labs(
+    title = "Veloland Switzerland - Degree Centrality",
+    color = "Degree"
+  ) +
+  theme_minimal()
+```
+
+```{r, warning = FALSE}
+# Visualize closeness centrality
+ggplot(veloland_edges) +
+  geom_sf(aes(color = closeness)) +
+  scale_color_viridis_c(option = "magma") +
+  labs(
+    title = "Veloland Switzerland - Closeness Centrality",
+    color = "Closeness"
+  ) +
+  theme_minimal()
+```
+
+## Interpretation
+
+When looking at the betweenness centrality map, we can see that a few edges are much more important than others. These edges connect major parts of the Swiss cycle network. They probably represent important routes between cities or main connections across regions.
+
+The degree centrality map shows that most nodes in the network have a low degree, usually between two and three. This makes sense because cycle paths often just connect two points, and not many intersections are super complex. Higher degree values are mostly found in urban areas where many routes meet.
+
+The closeness centrality map shows that nodes in the middle of Switzerland have higher closeness values. This means that they are easier to reach from other parts of the network. It matches with the idea that the central areas are better connected and more accessible, while the edges of the country are less connected.
+
+Overall, the different centrality measures highlight different aspects of how the cycle network works: important crossings, major connecting paths, and the overall accessibility of places.
+
+
+
+
